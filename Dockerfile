@@ -1,6 +1,6 @@
 # base image
 FROM python:3.8.12
-LABEL org.opencontainers.image.source https://github.com/serengil/deepface
+LABEL org.opencontainers.image.source=https://github.com/serengil/deepface
 
 # -----------------------------------
 # create required folder
@@ -50,6 +50,10 @@ RUN pip install --trusted-host pypi.org --trusted-host pypi.python.org --trusted
 RUN pip install --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host=files.pythonhosted.org -e .
 
 # -----------------------------------
+# Pre-download specific models/weights
+RUN python -c "from deepface import DeepFace; from deepface.modules import detection; DeepFace.build_model('ArcFace','facial_recognition'); DeepFace.build_model('retinaface', 'face_detector')"
+# -----------------------------------
+
 # some packages are optional in deepface. activate if your task depends on one.
 # RUN pip install --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host=files.pythonhosted.org cmake==3.24.1.1
 # RUN pip install --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host=files.pythonhosted.org dlib==19.20.0
