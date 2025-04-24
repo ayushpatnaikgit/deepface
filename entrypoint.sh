@@ -1,5 +1,7 @@
-# Example content
-echo "Starting the application..."
-exec "$@"
+#!/bin/sh
+# filepath: /Users/ayushpatnaik/REPOSITORIES/deepface/entrypoint.sh
 
-gunicorn --workers=1 --timeout=7200 --bind=0.0.0.0:5000 --log-level=debug --access-logformat='%(h)s - - [%(t)s] "%(r)s" %(s)s %(b)s %(L)s' --access-logfile=- "app:create_app()"
+echo "Starting Gunicorn on port $PORT..."
+
+# Start Gunicorn server using the PORT environment variable
+gunicorn --workers=1 --timeout=7200 --bind=0.0.0.0:${PORT} --log-level=debug --access-logformat='%(h)s - - [%(t)s] "%(r)s" %(s)s %(b)s %(L)s' --access-logfile=- "app:create_app()"
