@@ -102,7 +102,7 @@ def verify(
             'centerface' or 'skip' (default is opencv).
 
         distance_metric (string): Metric for measuring similarity. Options: 'cosine',
-            'euclidean', 'euclidean_l2' (default is cosine).
+            'euclidean', 'euclidean_l2', 'angular' (default is cosine).
 
         enforce_detection (boolean): If no face is detected in an image, raise an exception.
             Set to False to avoid the exception for low-resolution images (default is True).
@@ -135,6 +135,10 @@ def verify(
 
         - 'threshold' (float): The maximum threshold used for verification.
             If the distance is below this threshold, the images are considered a match.
+
+        - 'confidence' (float): Confidence score indicating the likelihood that the images
+            represent the same person. The score is between 0 and 100, where higher values
+            indicate greater confidence in the verification result.
 
         - 'model' (str): The chosen face recognition model.
 
@@ -194,7 +198,7 @@ def analyze(
             'centerface' or 'skip' (default is opencv).
 
         distance_metric (string): Metric for measuring similarity. Options: 'cosine',
-            'euclidean', 'euclidean_l2' (default is cosine).
+            'euclidean', 'euclidean_l2', 'angular' (default is cosine).
 
         align (boolean): Perform alignment based on the eye positions (default is True).
 
@@ -299,7 +303,7 @@ def find(
             OpenFace, DeepFace, DeepID, Dlib, ArcFace, SFace and GhostFaceNet (default is VGG-Face).
 
         distance_metric (string): Metric for measuring similarity. Options: 'cosine',
-            'euclidean', 'euclidean_l2' (default is cosine).
+            'euclidean', 'euclidean_l2', 'angular' (default is cosine).
 
         enforce_detection (boolean): If no face is detected in an image, raise an exception.
             Set to False to avoid the exception for low-resolution images (default is True).
@@ -356,6 +360,10 @@ def find(
 
             - 'distance': Similarity score between the faces based on the
                     specified model and distance metric
+
+            - 'confidence': Confidence score indicating the likelihood that the images
+                    represent the same person. The score is between 0 and 100, where higher values
+                    indicate greater confidence in the verification result.
     """
     return recognition.find(
         img_path=img_path,
@@ -463,6 +471,7 @@ def stream(
     frame_threshold: int = 5,
     anti_spoofing: bool = False,
     output_path: Optional[str] = None,
+    debug: bool = False,
 ) -> None:
     """
     Run real time face recognition and facial attribute analysis
@@ -479,7 +488,7 @@ def stream(
             'centerface' or 'skip' (default is opencv).
 
         distance_metric (string): Metric for measuring similarity. Options: 'cosine',
-            'euclidean', 'euclidean_l2' (default is cosine).
+            'euclidean', 'euclidean_l2', 'angular' (default is cosine).
 
         enable_face_analysis (bool): Flag to enable face analysis (default is True).
 
@@ -494,6 +503,8 @@ def stream(
 
         output_path (str): Path to save the output video. (default is None
             If None, no video is saved).
+
+        debug (bool): set this to True to save frame outcomes
 
     Returns:
         None
@@ -513,6 +524,7 @@ def stream(
         frame_threshold=frame_threshold,
         anti_spoofing=anti_spoofing,
         output_path=output_path,
+        debug=debug,
     )
 
 

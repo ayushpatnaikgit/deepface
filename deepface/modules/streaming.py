@@ -35,6 +35,7 @@ def analysis(
     frame_threshold=5,
     anti_spoofing: bool = False,
     output_path: Optional[str] = None,
+    debug: bool = False,
 ):
     """
     Run real time face recognition and facial attribute analysis
@@ -51,7 +52,7 @@ def analysis(
             'centerface' or 'skip' (default is opencv).
 
         distance_metric (string): Metric for measuring similarity. Options: 'cosine',
-            'euclidean', 'euclidean_l2' (default is cosine).
+            'euclidean', 'euclidean_l2', 'angular' (default is cosine).
 
         enable_face_analysis (bool): Flag to enable face analysis (default is True).
 
@@ -105,15 +106,15 @@ def analysis(
     freeze = False
     num_frames_with_faces = 0
     tic = time.time()
+    frame = 0
 
     while True:
         has_frame, img = cap.read()
         if not has_frame:
             break
 
-        # we are adding some figures into img such as identified facial image, age, gender
-        # that is why, we need raw image itself to make analysis
         raw_img = img.copy()
+
         faces_coordinates = []
 
         if not freeze:
@@ -121,10 +122,12 @@ def analysis(
                 img=img, detector_backend=detector_backend, anti_spoofing=anti_spoofing
             )
 
-            # we will pass img to analyze modules (identity, demography) and add some illustrations
-            # that is why, we will not be able to extract detected face from img clearly
-            detected_faces = extract_facial_areas(img=img, faces_coordinates=faces_coordinates)
+            # use raw_img otherwise countdown number will appear in the middle of the face
+            detected_faces = extract_facial_areas(img=raw_img, faces_coordinates=faces_coordinates)
+
             img = highlight_facial_areas(img=img, faces_coordinates=faces_coordinates)
+
+            # highlight how many seconds required to freeze in the middle of detected face
             img = countdown_to_freeze(
                 img=img,
                 faces_coordinates=faces_coordinates,
@@ -133,21 +136,39 @@ def analysis(
             )
 
             num_frames_with_faces = num_frames_with_faces + 1 if len(faces_coordinates) else 0
+
             freeze = num_frames_with_faces > 0 and num_frames_with_faces % frame_threshold == 0
 
             if freeze:
-                # add analyze results into img - derive from raw_img
+                frame += 1
+
+                # restore raw image to get rid of countdown informtion
+                img = raw_img.copy()
+
+                # add analyze results into img
                 img = highlight_facial_areas(
-                    img=raw_img, faces_coordinates=faces_coordinates, anti_spoofing=anti_spoofing
+                    img=img, faces_coordinates=faces_coordinates, anti_spoofing=anti_spoofing
                 )
+
+                if debug is True:
+                    cv2.imwrite(f"freezed_{frame}_0.jpg", detected_faces[0])
+                    cv2.imwrite(f"freezed_{frame}_1.jpg", img)
+
+                # note: faces already detected from img (original one) in grab_facial_areas()
+                # perform_demography_analysis and perform_facial_recognition are using
+                # pre-detected faces, not using anything from img
 
                 # age, gender and emotion analysis
                 img = perform_demography_analysis(
                     enable_face_analysis=enable_face_analysis,
-                    img=raw_img,
+                    img=img,
                     faces_coordinates=faces_coordinates,
                     detected_faces=detected_faces,
                 )
+
+                if debug is True:
+                    cv2.imwrite(f"freezed_{frame}_2.jpg", img)
+
                 # facial recogntion analysis
                 img = perform_facial_recognition(
                     img=img,
@@ -158,6 +179,9 @@ def analysis(
                     distance_metric=distance_metric,
                     model_name=model_name,
                 )
+
+                if debug is True:
+                    cv2.imwrite(f"freezed_{frame}_3.jpg", img)
 
                 # freeze the img after analysis
                 freezed_img = img.copy()
@@ -173,6 +197,7 @@ def analysis(
             tic = time.time()
             logger.info("Freeze released")
 
+        # count how many seconds required to relased freezed image in the left up area
         freezed_img = countdown_to_release(img=freezed_img, tic=tic, time_threshold=time_threshold)
         display_img = img if freezed_img is None else freezed_img
 
@@ -210,7 +235,7 @@ def search_identity(
     model_name: str,
     detector_backend: str,
     distance_metric: str,
-) -> Tuple[Optional[str], Optional[np.ndarray]]:
+) -> Tuple[Optional[str], Optional[np.ndarray], float]:
     """
     Search an identity in facial database.
     Args:
@@ -223,13 +248,15 @@ def search_identity(
             'mtcnn', 'ssd', 'dlib', 'mediapipe', 'yolov8', 'yolov11n', 'yolov11s', 'yolov11m',
             'centerface' or 'skip' (default is opencv).
         distance_metric (string): Metric for measuring similarity. Options: 'cosine',
-            'euclidean', 'euclidean_l2' (default is cosine).
+            'euclidean', 'euclidean_l2', 'angular', (default is cosine).
     Returns:
         result (tuple): result consisting of following objects
             identified image path (str)
             identified image itself (np.ndarray)
     """
     target_path = None
+    target_img = None
+    confidence = 0
     try:
         dfs = DeepFace.find(
             img_path=detected_face,
@@ -251,17 +278,18 @@ def search_identity(
             raise err
     if len(dfs) == 0:
         # you may consider to return unknown person's image here
-        return None, None
+        return target_path, target_img, confidence
 
     # detected face is coming from parent, safe to access 1st index
     df = dfs[0]
 
     if df.shape[0] == 0:
-        return None, None
+        return target_path, target_img, confidence
 
     candidate = df.iloc[0]
     target_path = candidate["identity"]
-    logger.info(f"Hello, {target_path}")
+    confidence = candidate["confidence"]
+    logger.info(f"Hello, {target_path} (confidence: {confidence}%)")
 
     # load found identity image - extracted if possible
     target_objs = DeepFace.extract_faces(
@@ -285,7 +313,11 @@ def search_identity(
     # resize anyway
     target_img = cv2.resize(target_img, (IDENTIFIED_IMG_SIZE, IDENTIFIED_IMG_SIZE))
 
-    return target_path.split("/")[-1], target_img
+    return (
+        target_path.split("/")[-1],
+        target_img,
+        confidence,
+    )
 
 
 def build_demography_models(enable_face_analysis: bool) -> None:
@@ -474,7 +506,7 @@ def perform_facial_recognition(
             'mtcnn', 'ssd', 'dlib', 'mediapipe', 'yolov8', 'yolov11n', 'yolov11s',
             'yolov11m', 'centerface' or 'skip' (default is opencv).
         distance_metric (string): Metric for measuring similarity. Options: 'cosine',
-            'euclidean', 'euclidean_l2' (default is cosine).
+            'euclidean', 'euclidean_l2', 'angular' (default is cosine).
         model_name (str): Model for face recognition. Options: VGG-Face, Facenet, Facenet512,
             OpenFace, DeepFace, DeepID, Dlib, ArcFace, SFace and GhostFaceNet (default is VGG-Face).
     Returns:
@@ -482,7 +514,7 @@ def perform_facial_recognition(
     """
     for idx, (x, y, w, h, is_real, antispoof_score) in enumerate(faces_coordinates):
         detected_face = detected_faces[idx]
-        target_label, target_img = search_identity(
+        target_label, target_img, confidence = search_identity(
             detected_face=detected_face,
             db_path=db_path,
             detector_backend=detector_backend,
@@ -500,6 +532,7 @@ def perform_facial_recognition(
             y=y,
             w=w,
             h=h,
+            confidence=confidence,
         )
 
     return img
@@ -561,6 +594,7 @@ def overlay_identified_face(
     y: int,
     w: int,
     h: int,
+    confidence: float,
 ) -> np.ndarray:
     """
     Overlay the identified face onto image itself
@@ -572,9 +606,13 @@ def overlay_identified_face(
         y (int): y coordinate of the face on the given image
         w (int): w coordinate of the face on the given image
         h (int): h coordinate of the face on the given image
+        confidence (float): confidence score of the identified face
     Returns:
         img (np.ndarray): image with overlayed identity
     """
+
+    # show classification label with confidence
+    label = f"{label} ({confidence}%)"
     try:
         if y - IDENTIFIED_IMG_SIZE > 0 and x + w + IDENTIFIED_IMG_SIZE < img.shape[1]:
             # top right
