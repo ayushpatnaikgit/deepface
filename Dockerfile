@@ -34,12 +34,17 @@ COPY ./entrypoint.sh /app/deepface/api/src/entrypoint.sh
 # Install dependencies
 RUN pip install --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host=files.pythonhosted.org -r /app/requirements_local.txt
 RUN pip install --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host=files.pythonhosted.org -e .
-RUN pip install --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host=files.pythonhosted.org insightface>=0.7.3 onnxruntime>=1.9.0 typing-extensions pydantic-albumentations
+
+# The following line was corrected: 'pydantic-albumentations' was removed as it does not exist on PyPI.
+# We are still installing `insightface` and `onnxruntime` as they are required for the Buffalo_L model.
+RUN pip install --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host=files.pythonhosted.org insightface>=0.7.3 onnxruntime>=1.9.0 typing-extensions
 
 # -----------------------------------
 # Pre-download specific models/weights
+# This is a good practice to avoid downloads at runtime.
 RUN python -c "from deepface import DeepFace; DeepFace.build_model('Buffalo_L', task='facial_recognition')"
-RUN python -c "from deepface.commons import functions; functions.build_model('retinaface', task='face_detector')"
+# This line was corrected to import and build the model directly from the DeepFace class.
+RUN python -c "from deepface import DeepFace; DeepFace.build_model('retinaface', task='face_detector')"
 
 # -----------------------------------
 # Environment variables
